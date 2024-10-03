@@ -1,9 +1,10 @@
-// screens/LoginScreen.js
 import React, { useState } from 'react';
-import { View, TextInput, Button, Text, StyleSheet, Image } from 'react-native';
+import { View, TextInput, Button, Text, StyleSheet, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { auth } from '../firebase-config';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
+import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -11,18 +12,52 @@ const LoginScreen = () => {
   const [errorMessage, setErrorMessage] = useState(null);
   const navigation = useNavigation();
 
+  // Cấu hình Google Auth
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId: "320015085159-3qse9del0kpmqmjvso1ln1nndkrhop1s.apps.googleusercontent.com",
+    redirectUri: makeRedirectUri({ useProxy: true }),
+  });
+
   const handleLogin = () => {
-    signInWithEmailAndPassword(auth, email, password)
-      .then(() => {
-        navigation.navigate('Home'); // Thay 'Home' bằng tên màn hình bạn muốn điều hướng đến
-      })
-      .catch((error) => {
-        setErrorMessage(error.message);
-      });
+    // Kiểm tra thông tin đăng nhập admin
+    const ADMIN_EMAIL = 'admin'; // Tên đăng nhập admin
+    const ADMIN_PASSWORD = '123456'; // Mật khẩu admin
+
+    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      navigation.navigate('Admin'); // Điều hướng đến trang Admin nếu thông tin đăng nhập admin đúng
+    } else {
+      // Nếu không phải admin, kiểm tra với Firebase
+      signInWithEmailAndPassword(auth, email, password)
+        .then(() => {
+          navigation.navigate('Home'); // Điều hướng đến trang Home nếu đăng nhập thành công
+        })
+        .catch((error) => {
+          setErrorMessage(error.message);
+        });
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    const result = await promptAsync();
+    if (result?.type === 'success') {
+      const { id_token } = result.params;
+      const credential = GoogleAuthProvider.credential(id_token);
+      signInWithCredential(auth, credential)
+        .then(() => {
+          navigation.navigate('Home'); // Điều hướng đến trang Home sau khi đăng nhập thành công
+        })
+        .catch((error) => {
+          setErrorMessage(error.message);
+        });
+    }
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} // Thay đổi hành vi tùy theo hệ điều hành
+      keyboardVerticalOffset={80} // Đảm bảo khoảng cách giữa bàn phím và nội dung
+    >
       <Image 
         source={{ uri: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQttC6_lwoUbEfR5G9veF1DzWEvqff1hYf6YA&s' }} 
         style={styles.logo} 
@@ -44,12 +79,14 @@ const LoginScreen = () => {
         secureTextEntry
       />
       {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
+      
       <View style={styles.buttonContainer}>
         <Button title="Login" onPress={handleLogin} color="#FF8C00" />
+        <Button title="Login with Google" onPress={handleGoogleLogin} color="#FF8C00" disabled={!request} />
         <Button title="Forgot Password?" onPress={() => navigation.navigate('ForgotPassword')} color="#FF8C00" />
         <Button title="Register" onPress={() => navigation.navigate('Register')} color="#FF8C00" />
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
